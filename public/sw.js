@@ -1,8 +1,8 @@
 /* Gestion Agence — service worker versionné avec la release. */
-const BUILD_VERSION = '4.7.0';
+const BUILD_VERSION = '4.8.0';
 const CACHE_PREFIX = 'gestion-agence-';
 const CACHE_NAME = `${CACHE_PREFIX}${BUILD_VERSION}`;
-const PRECACHE = ['/index.html', '/manifest.webmanifest'];
+const PRECACHE = ['/index.html', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/apple-touch-icon.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil(

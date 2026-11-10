@@ -16,7 +16,7 @@ export const TABLES = {
     columns: [
       ['date_depot', 'Dépôt', 'date'], ['statut', 'Statut', 'statut'],
       ['montant_client', 'Montant client', 'money'], ['montant_bloque', 'Bloqué', 'money'],
-      ['reste_bloque', 'Reste bloqué', 'money'], ['gain', 'Gain', 'money'], ['reste_rembourser', 'À rembourser', 'money']
+      ['reste_bloque', 'Reste bloqué', 'money'], ['com_deduite', 'Commission', 'money'], ['gain', 'Gain', 'money'], ['reste_rembourser', 'À rembourser', 'money']
     ],
     compute: (r, settings) => calcCompte(r, settings)
   },

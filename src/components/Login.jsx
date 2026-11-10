@@ -22,7 +22,7 @@ export default function Login({ settings }) {
     <main className="login">
       <div className="login-card">
         <Logo settings={settings} />
-        <p className="eyebrow">{settings.agencyName} · v4.7</p>
+        <p className="eyebrow">{settings.agencyName} · v4.8</p>
         <h1>Votre agence, en clair.</h1>
         <p className="muted">Dossiers, capital et remboursements réunis au même endroit, sur tous vos appareils.</p>
         <form onSubmit={submit}>

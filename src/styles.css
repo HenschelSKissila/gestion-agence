@@ -250,3 +250,22 @@ textarea { resize: vertical; }
 }
 
 @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+/* ---------- v4.8 : résultats négatifs, partage ---------- */
+.neg-text { color: var(--neg); }
+.mini.spaced { margin-top: 14px; }
+.chips.spaced { margin: 14px 0 6px; }
+fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+fieldset:disabled input, fieldset:disabled select { opacity: .7; }
+label.check { display: flex; align-items: center; gap: 10px; font-weight: 500; color: var(--text); }
+label.check input { width: 18px; height: 18px; padding: 0; flex: none; accent-color: var(--accent); }
+.member-list { list-style: none; margin: 14px 0 0; padding: 0; }
+.member-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; background: var(--surface-2); border-radius: 12px; margin-bottom: 8px; }
+.member-list span { min-width: 0; overflow-wrap: anywhere; }
+.member-list small { display: block; color: var(--text-2); font-size: 12px; }
+.invite { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-top: 14px; }
+.invite label:first-child { flex: 1 1 220px; }
+.invite input[type=email] { border: 1px solid var(--line); padding: 11px 12px; border-radius: 10px; background: var(--surface); color: var(--text); width: 100%; font-size: 16px; font-weight: 400; }
+.invite .check { min-height: 42px; }
+.settings .alert, .panel > .alert { margin: 0 0 14px; }
+@media (max-width: 1000px) { .grid-2 > div > .panel { margin-bottom: 18px; } }

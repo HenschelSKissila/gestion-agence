@@ -19,7 +19,8 @@ export const DEFAULTS = {
   sparkasse: 0,
   commerzbank: 0,
   wise: 0,
-  fraisBancairesCompteBloqueVisa: 127
+  fraisBancairesCompteBloqueVisa: 127,
+  commissionSurRefus: true
 };
 
 export const SETTINGS_TABLE = 'parametres_utilisateur';
@@ -34,7 +35,9 @@ export function normalizeSettings(raw = {}) {
   for (const k of Object.keys(DEFAULTS)) {
     const v = raw?.[k];
     if (v === undefined || v === null) continue;
-    if (typeof DEFAULTS[k] === 'number') {
+    if (typeof DEFAULTS[k] === 'boolean') {
+      out[k] = v === true || v === 'true';
+    } else if (typeof DEFAULTS[k] === 'number') {
       const n = typeof v === 'string' ? Number(v.replace(',', '.')) : Number(v);
       if (v !== '' && Number.isFinite(n)) out[k] = n;
     } else {

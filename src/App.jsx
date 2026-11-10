@@ -2,9 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { LayoutDashboard, Settings as SettingsIcon, LogOut, Sun, Moon, Wifi, WifiOff, RefreshCw, X } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { totaux } from './lib/calculs';
-import { newId, enqueue, applyOp, flushQueue } from './lib/storage';
+import { newId, enqueue, applyOp, flushQueue, readQueue } from './lib/storage';
 import { normalizeSettings, readLocalSettings, saveLocalSettings, pushSettings, pullSettings } from './lib/settings';
 import { TABLES, EMPTY_DATA, cleanRow } from './lib/tables';
+import { ownWorkspace, cachedWorkspace, resolveWorkspace, preferWorkspace, addMember, removeMember, readDataCache, writeDataCache, clearLocalData } from './lib/workspace';
 import Logo from './components/Logo.jsx';
 import Login from './components/Login.jsx';
 import Dashboard from './components/Dashboard.jsx';
@@ -33,8 +34,11 @@ export default function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('gestion-agence-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
   const [installEvent, setInstallEvent] = useState(null);
   const [legal, setLegal] = useState(null);
+  const [workspace, setWorkspace] = useState(null);
   const loadedUid = useRef(null);
   const uid = session?.user.id;
+  const wid = workspace?.id;
+  const canEdit = workspace?.canEdit !== false;
 
   const notify = (text, tone = 'pos') => setNotice({ text, tone });
 
@@ -54,7 +58,7 @@ export default function App() {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
-      if (!s) { loadedUid.current = null; setData(EMPTY_DATA); }
+      if (!s) { loadedUid.current = null; setData(EMPTY_DATA); setWorkspace(null); }
       else if (loadedUid.current !== s.user.id) { loadedUid.current = s.user.id; setTimeout(() => load(s.user.id), 0); }
     });
     return () => subscription.unsubscribe();
@@ -79,30 +83,67 @@ export default function App() {
     return () => clearTimeout(t);
   }, [notice]);
 
+  // Copie locale : chaque changement des dossiers est gardé pour une ouverture sans réseau.
+  useEffect(() => { if (wid && !loading) writeDataCache(wid, data); }, [wid, data, loading]);
+
   async function load(userId, silent = false) {
-    if (silent) setRefreshing(true); else setLoading(true);
+    let shown = silent;
+    if (!silent) {
+      // Affichage immédiat de la dernière copie locale, puis mise à jour en arrière-plan.
+      const ws = cachedWorkspace(userId) || ownWorkspace(userId);
+      const cached = readDataCache(ws.id);
+      if (cached) { setWorkspace(ws); setData({ ...EMPTY_DATA, ...cached.data }); setLoading(false); shown = true; }
+      else setLoading(true);
+    }
+    setRefreshing(shown);
     try {
       const q = navigator.onLine ? await flushQueue(supabase) : { kept: 0, rejected: [] };
+      const ws = await resolveWorkspace(supabase, userId);
       const tables = Object.keys(EMPTY_DATA);
-      const r = await Promise.all(tables.map(t => supabase.from(t).select('*').eq('user_id', userId)));
+      const r = await Promise.all(tables.map(t => supabase.from(t).select('*').eq('user_id', ws.id)));
       const failed = r.find(x => x.error);
       if (failed) throw new Error(failed.error.message);
+      setWorkspace(ws);
       setData(Object.fromEntries(tables.map((t, i) => [t, r[i].data || []])));
-      const ps = await pullSettings(supabase, userId);
+      const ps = await pullSettings(supabase, ws.id);
       if (ps.settings) setSettings(ps.settings);
       if (q.rejected.length) notify('Modifications hors ligne refusées par la base : ' + q.rejected[0], 'neg');
       else if (q.kept) notify(q.kept + ' modification(s) hors ligne en attente d’envoi.', 'warn');
-      else if (ps.notice) notify(ps.notice, 'warn');
+      else if (ps.notice && ws.canEdit) notify(ps.notice, 'warn');
       else if (!silent) notify('Données à jour.');
     } catch (e) {
-      notify('Impossible de charger la base : ' + e.message, 'neg');
+      setWorkspace(w => w || cachedWorkspace(userId) || ownWorkspace(userId));
+      if (shown && !navigator.onLine) notify('Hors ligne : affichage des dernières données enregistrées sur cet appareil.', 'warn');
+      else notify('Impossible de charger la base : ' + e.message, 'neg');
     } finally {
       setLoading(false); setRefreshing(false);
     }
   }
 
+  async function signOut() {
+    if (readQueue().length && !confirm('Des modifications hors ligne ne sont pas encore envoyées et seront perdues. Se déconnecter quand même ?')) return;
+    await supabase.auth.signOut({ scope: 'local' });
+    clearLocalData();
+    setSettings(readLocalSettings());
+  }
+
+  function switchWorkspace(id) { preferWorkspace(id); setTab('dashboard'); load(uid, true); }
+
+  async function shareWith(email, edit) {
+    const r = await addMember(supabase, email, edit);
+    if (r.error) notify('Invitation impossible : ' + r.error, 'neg');
+    else { notify('Accès accordé à ' + email.trim().toLowerCase() + '.'); load(uid, true); }
+    return !r.error;
+  }
+
+  async function unshare(email) {
+    if (!confirm('Retirer l’accès de ' + email + ' ?')) return;
+    const r = await removeMember(supabase, uid, email);
+    if (r.error) notify('Retrait impossible : ' + r.error, 'neg'); else { notify('Accès retiré.'); load(uid, true); }
+  }
+
   async function save(table, row) {
-    const clean = { ...cleanRow(table, row), id: row.id || newId(), user_id: uid };
+    const clean = { ...cleanRow(table, row), id: row.id || newId(), user_id: wid };
     setData(d => ({ ...d, [table]: d[table].some(x => x.id === clean.id) ? d[table].map(x => (x.id === clean.id ? clean : x)) : [...d[table], clean] }));
     setModal(null);
     const op = { table, kind: 'upsert', row: clean };
@@ -126,11 +167,11 @@ export default function App() {
   async function saveSettings(raw) {
     const next = normalizeSettings(raw);
     setSettings(next);
-    const ts = saveLocalSettings(next, uid);
+    const ts = saveLocalSettings(next, wid);
     if (!online) { notify('Paramètres enregistrés sur cet appareil ; ils seront envoyés au retour de la connexion.', 'warn'); return; }
-    const r = await pushSettings(supabase, uid, next, ts);
+    const r = await pushSettings(supabase, wid, next, ts);
     if (r.error) notify('Paramètres enregistrés sur cet appareil seulement — synchronisation impossible : ' + r.error, 'neg');
-    else notify('Paramètres enregistrés et synchronisés sur tous vos appareils.');
+    else notify('Paramètres enregistrés et synchronisés.');
   }
 
   const totals = useMemo(() => totaux({ ...data, parametres: settings }), [data, settings]);
@@ -149,12 +190,12 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <button className="nav nav-logout" onClick={() => supabase.auth.signOut()}><LogOut size={20} /><span className="nav-long">Déconnexion</span></button>
+        <button className="nav nav-logout" onClick={signOut}><LogOut size={20} /><span className="nav-long">Déconnexion</span></button>
       </aside>
 
       <main className="content">
         <header className="topbar">
-          <div><span className="eyebrow">{settings.agencyName}</span><h1>{TITLES[tab] || TABLES[tab].label}</h1></div>
+          <div><span className="eyebrow">{settings.agencyName}{workspace && !workspace.own ? ` · partagé par ${workspace.ownerEmail}` : ''}</span><h1>{TITLES[tab] || TABLES[tab].label}</h1></div>
           <div className="header-actions">
             <span className={online ? 'status' : 'status off'} title={online ? 'En ligne' : 'Hors ligne'}>{online ? <Wifi size={15} /> : <WifiOff size={15} />}<span>{online ? 'En ligne' : 'Hors ligne'}</span></span>
             <button className="icon-btn" onClick={() => load(uid, true)} disabled={!online || refreshing} aria-label="Actualiser les données"><RefreshCw size={18} className={refreshing ? 'spin' : ''} /></button>
@@ -173,12 +214,13 @@ export default function App() {
           : tab === 'settings' ? (
             <SettingsPanel
               settings={settings} email={session.user.email} online={online} onSave={saveSettings}
-              onRefresh={() => load(uid, true)} onSignOut={() => supabase.auth.signOut()}
+              workspace={workspace || ownWorkspace(uid)} uid={uid} onSwitch={switchWorkspace} onShare={shareWith} onUnshare={unshare}
+              onRefresh={() => load(uid, true)} onSignOut={signOut}
               onInstall={installEvent ? async () => { await installEvent.prompt(); setInstallEvent(null); } : null}
             />
           ) : (
             <TableView
-              key={tab} table={tab} rows={data[tab]} settings={settings}
+              key={tab} table={tab} rows={data[tab]} settings={settings} readOnly={!canEdit}
               onAdd={() => setModal({ table: tab })} onEdit={row => setModal({ table: tab, row })} onDelete={row => remove(tab, row)}
             />
           )}
@@ -186,7 +228,7 @@ export default function App() {
         {modal && <Editor config={TABLES[modal.table]} row={modal.row} onClose={() => setModal(null)} onSave={row => save(modal.table, row)} />}
 
         <footer>
-          © {new Date().getFullYear()} {settings.agencyName} · <button onClick={() => setLegal('privacy')}>Confidentialité</button> · <button onClick={() => setLegal('terms')}>Conditions d’utilisation</button> · v4.7
+          © {new Date().getFullYear()} {settings.agencyName} · <button onClick={() => setLegal('privacy')}>Confidentialité</button> · <button onClick={() => setLegal('terms')}>Conditions d’utilisation</button> · v4.8
         </footer>
         {legal && <Legal type={legal} onClose={() => setLegal(null)} />}
       </main>

@@ -1,10 +1,10 @@
-import { num } from './calculs';
+import { euros } from './calculs';
 
 const eur = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
 const dateFmt = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
 
-/** Affichage monétaire. Passe par num() comme avant : aucune valeur calculée n'est modifiée. */
-export const money = n => eur.format(num(n));
+/** Affichage monétaire ; un résultat négatif (déficit, perte) reste négatif. */
+export const money = n => eur.format(euros(n));
 
 export function dateFr(iso) {
   if (!iso) return '—';

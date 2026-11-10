@@ -13,7 +13,7 @@ function Cell({ type, value }) {
   return value || '—';
 }
 
-export default function TableView({ table, rows, settings, onAdd, onEdit, onDelete }) {
+export default function TableView({ table, rows, settings, readOnly, onAdd, onEdit, onDelete }) {
   const cfg = TABLES[table];
   const [query, setQuery] = useState('');
   const [statut, setStatut] = useState('');
@@ -28,7 +28,7 @@ export default function TableView({ table, rows, settings, onAdd, onEdit, onDele
       .sort((a, b) => String(b[cfg.dateField] || '').localeCompare(String(a[cfg.dateField] || '')));
   }, [rows, query, statut, settings, cfg]);
 
-  const actions = row => (
+  const actions = row => readOnly ? null : (
     <div className="row-actions">
       <button className="icon-btn" onClick={() => onEdit(row)} aria-label={`Modifier ${cfg.title(row)}`}><Pencil size={16} /></button>
       <button className="icon-btn danger" onClick={() => onDelete(row)} aria-label={`Supprimer ${cfg.title(row)}`}><Trash2 size={16} /></button>
@@ -40,7 +40,7 @@ export default function TableView({ table, rows, settings, onAdd, onEdit, onDele
     <section className="panel table-panel">
       <div className="panel-head">
         <div><span className="eyebrow">Registre</span><h2>{cfg.label} <span className="count">{view.length}</span></h2></div>
-        <button className="btn primary" onClick={onAdd}><Plus size={17} /> Ajouter</button>
+        {readOnly ? <span className="badge neutral">Lecture seule</span> : <button className="btn primary" onClick={onAdd}><Plus size={17} /> Ajouter</button>}
       </div>
 
       {rows.length > 0 && (
@@ -58,7 +58,7 @@ export default function TableView({ table, rows, settings, onAdd, onEdit, onDele
         </div>
       )}
 
-      {!rows.length ? <div className="empty">Aucune donnée pour l’instant.<br />Ajoutez votre premier élément.</div>
+      {!rows.length ? <div className="empty">Aucune donnée pour l’instant.{!readOnly && <><br />Ajoutez votre premier élément.</>}</div>
         : !view.length ? <div className="empty">Aucun résultat pour ce filtre.</div>
         : <>
           <div className="table-wrap">
