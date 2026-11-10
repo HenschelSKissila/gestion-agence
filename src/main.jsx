@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
 import './styles.css';
 
-const SW_VERSION = '4.2.0';
+const SW_VERSION = '4.7.0';
 
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;

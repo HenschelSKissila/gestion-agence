@@ -1,5 +1,5 @@
 /* Gestion Agence — service worker versionné avec la release. */
-const BUILD_VERSION = '4.2.0';
+const BUILD_VERSION = '4.7.0';
 const CACHE_PREFIX = 'gestion-agence-';
 const CACHE_NAME = `${CACHE_PREFIX}${BUILD_VERSION}`;
 const PRECACHE = ['/index.html', '/manifest.webmanifest'];

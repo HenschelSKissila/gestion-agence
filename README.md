@@ -1,4 +1,4 @@
-# Gestion Agence · v4.6
+# Gestion Agence · v4.7
 
 Application React + Vite, PWA et Supabase pour le suivi des comptes bloqués, candidats, prêts personnels et dettes.
 
@@ -6,9 +6,22 @@ Application React + Vite, PWA et Supabase pour le suivi des comptes bloqués, ca
 ```bash
 npm install
 npm run dev
-npm run test:calculs
+npm test
 npm run build
 ```
+
+## Mise à jour v4.7 — à faire une fois
+1. Dans Supabase → SQL Editor, exécuter `schema.sql` en entier (idempotent). Il crée la table `parametres_utilisateur` (une ligne JSON par compte, protégée par RLS).
+2. Ouvrir l’application sur l’appareil qui contient les bons montants → Paramètres → **Enregistrer**. Les autres appareils du même compte les reçoivent au chargement ou au retour au premier plan.
+
+## Synchronisation
+- Tous les paramètres (banques, associés, taux, frais, nom, logo) sont stockés par compte dans Supabase ; `localStorage` ne sert plus que de cache hors ligne.
+- Dernier enregistrement gagnant ; une modification faite hors ligne est renvoyée automatiquement au retour du réseau.
+- La file hors ligne des dossiers est rejouée au chargement ; une opération n’est retirée qu’une fois acceptée ou refusée par la base.
+
+## Structure
+- `src/lib/calculs.js` : formules (inchangées en v4.7) · `src/lib/settings.js` : paramètres et synchronisation · `src/lib/storage.js` : file hors ligne · `src/lib/tables.js` : définition des registres.
+- `src/components/` : écrans · `src/styles.css` : thèmes clair/sombre par variables CSS.
 
 ## Calculs métier
 - Disponible = banques uniquement : N26 + Sparkasse + Commerzbank + Wise.

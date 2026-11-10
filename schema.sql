@@ -14,3 +14,14 @@ alter table public.parametres add column if not exists wise numeric not null def
 
 -- v4.4: frais Expatrio par compte bloqué avec visa (migration idempotente)
 alter table public.parametres add column if not exists fraisBancairesCompteBloqueVisa numeric not null default 127;
+
+-- v4.7: paramètres synchronisés par compte (une ligne JSON par utilisateur).
+-- Remplace la table parametres : tous les réglages (banques, associés, taux, nom, logo)
+-- suivent désormais le compte de connexion sur tous ses appareils.
+create table if not exists public.parametres_utilisateur(user_id uuid primary key references auth.users(id) on delete cascade, data jsonb not null default '{}'::jsonb, updated_at timestamptz not null default now());
+alter table public.parametres_utilisateur enable row level security;
+drop policy if exists parametres_utilisateur_owner on public.parametres_utilisateur;
+create policy parametres_utilisateur_owner on public.parametres_utilisateur for all to authenticated using ((select auth.uid())=user_id) with check ((select auth.uid())=user_id);
+grant select,insert,update,delete on public.parametres_utilisateur to authenticated;
+-- L'ancienne table n'est plus utilisée par l'application et n'avait aucune règle d'accès : on la verrouille.
+alter table public.parametres enable row level security;

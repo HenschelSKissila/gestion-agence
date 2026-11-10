@@ -1,10 +1,195 @@
-import React,{useEffect,useMemo,useState}from'react';import{LogIn,Plus,Trash2,Pencil,Wifi,WifiOff,LayoutDashboard,Users,Wallet,UserRound,Settings as SettingsIcon,RefreshCw,Sun,Moon,Download,ShieldCheck,FileText}from'lucide-react';import{supabase}from'./lib/supabase';import{totaux,num,dividendes}from'./lib/calculs';import{newId,readQueue,enqueue,clearQueue}from'./lib/storage';
-const TABLES={comptes:{label:'Comptes bloqués',icon:Wallet,fields:[['nom','Nom'],['prenom','Prénom'],['date_depot','Date de dépôt','date'],['statut','Statut','select',['en_cours','visa','refus']],['montant_client','Montant client','number'],['montant_bloque','Montant bloqué','number'],['retire','Déjà retiré','number'],['demarcheur','Démarcheur'],['commission','Commission','number'],['montant_rembourse','Remboursé','number'],['notes','Notes']]},candidats:{label:'Candidats',icon:Users,fields:[['nom','Nom'],['prenom','Prénom'],['telephone','Téléphone'],['date_prevue','Date prévue','date'],['montant_prevu','Montant prévu','number'],['statut','Statut','select',['attente','prochain','visa','refus']],['notes','Notes']]},dettes:{label:'Dettes — je dois',icon:Wallet,fields:[['nom','Créancier'],['date_op','Date','date'],['montant','Montant prêté','number'],['rembourse','Déjà payé','number'],['notes','Notes']]},perso:{label:'Perso — prêté (on me doit)',icon:UserRound,fields:[['nom','Débiteur / affaire'],['date_op','Date','date'],['montant','Montant investi','number'],['rembourse','Déjà remboursé','number'],['notes','Notes']]}};const empty={comptes:[],candidats:[],dettes:[],perso:[]};const money=n=>new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}).format(num(n));const DEFAULTS={agencyName:'Gestion Agence',pct_refus:100/3,associe1Nom:'Associé 1',associe1Investissement:0,associe1Part:50,associe2Nom:'Associé 2',associe2Investissement:0,associe2Part:50,logo:'',n26:0,sparkasse:0,commerzbank:0,wise:0,fraisBancairesCompteBloqueVisa:127};
-function Logo({settings,small=false}){return settings.logo?<img className={'logo '+(small?'logo-small':'')} src={settings.logo} alt={settings.agencyName}/>:<div className={'brand-mark '+(small?'small':'')}>GA</div>}
-function Login({onSession,settings}){const[email,setEmail]=useState(''),[password,setPassword]=useState(''),[error,setError]=useState('');async function go(e){e.preventDefault();setError('');const r=await supabase.auth.signInWithPassword({email,password});if(r.error)setError(r.error.message?.toLowerCase().includes('invalid login credentials')?'Identifiants incorrects. Vérifiez Supabase Auth.':r.error.message);else onSession(r.data.session)}return <main className="login"><div className="login-card"><Logo settings={settings}/><p className="eyebrow">{settings.agencyName.toUpperCase()} · v4.6</p><h1>Votre agence, en clair.</h1><p className="muted">Dossiers, capital et remboursements réunis dans un espace fiable, même hors connexion.</p><form onSubmit={go}><label>Email<input type="email" value={email} onChange={e=>setEmail(e.target.value)} required placeholder="vous@agence.fr"/></label><label>Mot de passe<input type="password" value={password} onChange={e=>setPassword(e.target.value)} required/></label>{error&&<div className="error">{error}</div>}<button className="primary"><LogIn size={17}/> Se connecter</button></form><small>Accès propriétaire et associé via Supabase Auth.</small></div></main>}
-function App(){const[session,setSession]=useState(null),[data,setData]=useState(empty),[tab,setTab]=useState('dashboard'),[online,setOnline]=useState(navigator.onLine),[loading,setLoading]=useState(true),[modal,setModal]=useState(null),[notice,setNotice]=useState(''),[settings,setSettings]=useState(()=>({...DEFAULTS,...JSON.parse(localStorage.getItem('gestion-agence-settings')||'{}')})),[dark,setDark]=useState(()=>localStorage.getItem('gestion-agence-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')),[installEvent,setInstallEvent]=useState(null),[legal,setLegal]=useState(null);useEffect(()=>{document.documentElement.dataset.theme=dark;localStorage.setItem('gestion-agence-theme',dark)},[dark]);useEffect(()=>{const h=e=>{e.preventDefault();setInstallEvent(e)};addEventListener('beforeinstallprompt',h);return()=>removeEventListener('beforeinstallprompt',h)},[]);useEffect(()=>{supabase.auth.getSession().then(({data})=>{setSession(data.session);if(data.session)load(data.session.user.id)});const{data:{subscription}}=supabase.auth.onAuthStateChange((_e,s)=>{setSession(s);if(s)load(s.user.id)});return()=>subscription.unsubscribe()},[]);useEffect(()=>{const on=()=>{setOnline(navigator.onLine);if(navigator.onLine&&session)sync(session.user.id)};addEventListener('online',on);addEventListener('offline',on);return()=>{removeEventListener('online',on);removeEventListener('offline',on)}},[session]);async function load(uid){setLoading(true);try{const r=await Promise.all(Object.keys(empty).map(t=>supabase.from(t).select('*').eq('user_id',uid)));if(r.some(x=>x.error))throw new Error(r.find(x=>x.error).error.message);const next={};Object.keys(empty).forEach((t,i)=>next[t]=r[i].data||[]);const pr=await supabase.from('parametres').select('*').eq('id',1).maybeSingle();if(!pr.error&&pr.data)setSettings(x=>({...x,...pr.data}));setData(next);setNotice('Base vérifiée · données à jour')}catch(e){setNotice('Impossible de vérifier la base : '+e.message)}finally{setLoading(false)}}async function sync(uid){for(const op of readQueue()){await supabase.from(op.table)[op.kind](op.row)}clearQueue();load(uid)}async function save(table,row){const clean={...row,id:row.id||newId(),user_id:session.user.id};setData(d=>({...d,[table]:d[table].some(x=>x.id===clean.id)?d[table].map(x=>x.id===clean.id?clean:x):[...d[table],clean]}));setModal(null);if(online){const r=await supabase.from(table).upsert(clean);if(r.error)setNotice(r.error.message)}else enqueue({table,kind:'upsert',row:clean})}async function remove(table,row){if(!confirm('Supprimer cet élément ?'))return;setData(d=>({...d,[table]:d[table].filter(x=>x.id!==row.id)}));if(online)await supabase.from(table).delete().eq('id',row.id);else enqueue({table,kind:'delete',row:{id:row.id}})}async function saveSettings(next){setSettings(next);localStorage.setItem('gestion-agence-settings',JSON.stringify(next));if(online){const {pct_refus,n26,sparkasse,commerzbank,wise,fraisBancairesCompteBloqueVisa}=next;const r=await supabase.from('parametres').upsert({id:1,pct_refus,n26,sparkasse,commerzbank,wise,fraisBancairesCompteBloqueVisa,updated_at:new Date().toISOString()});if(r.error)setNotice('Cache local enregistré ; Supabase : '+r.error.message);else setNotice('Paramètres enregistrés localement et dans Supabase.')}else setNotice('Paramètres enregistrés localement (hors ligne).')}if(!session)return <Login onSession={setSession} settings={settings}/>;if(loading)return <div className="loading">Vérification de la base…</div>;const t=totaux({comptes:data.comptes,dettes:data.dettes,perso:data.perso,candidats:data.candidats,parametres:settings});return <div className="app"><aside><div className="side-brand"><Logo settings={settings} small/><b>{settings.agencyName}</b></div>{[['dashboard','Tableau de bord',LayoutDashboard],...Object.entries(TABLES).map(([k,v])=>[k,v.label,v.icon])].map(([k,l,I])=><button className={tab===k?'nav active':'nav'} onClick={()=>setTab(k)} key={k}><I size={18}/><span>{l}</span></button>)}<div className="side-bottom"><button className="nav" onClick={()=>setTab('settings')}><SettingsIcon size={18}/><span>Paramètres</span></button><button className="nav" onClick={()=>supabase.auth.signOut()}><LogIn size={18}/><span>Déconnexion</span></button></div></aside><main className="content"><header><div><span className="eyebrow">ESPACE AGENCE · v4.6</span><h1>{tab==='dashboard'?'Vue d’ensemble':TABLES[tab]?.label||'Paramètres'}</h1></div><div className="header-actions"><button className="icon-btn" onClick={()=>setDark(dark==='dark'?'light':'dark')} aria-label="Changer le thème">{dark==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button><div className="status">{online?<Wifi size={15}/>:<WifiOff size={15}/>} {online?'En ligne':'Hors ligne'}</div></div></header>{notice&&<div className="notice">{notice}</div>}{tab==='dashboard'?<Dashboard totals={t} data={data} settings={settings}/>:tab==='settings'?<SettingsPanel settings={settings} onSave={saveSettings} online={online} onRefresh={()=>load(session.user.id)} onInstall={installEvent?async()=>{await installEvent.prompt();setInstallEvent(null)}:null}/>:<TableView table={tab} rows={data[tab]} onAdd={()=>setModal({table:tab})} onEdit={row=>setModal({table:tab,row})} onDelete={row=>remove(tab,row)}/>} {modal&&<Editor config={TABLES[modal.table]} row={modal.row} onClose={()=>setModal(null)} onSave={row=>save(modal.table,row)}/>}<footer>© {new Date().getFullYear()} {settings.agencyName}, tous droits réservés. <button onClick={()=>setLegal('privacy')}>Confidentialité</button> · <button onClick={()=>setLegal('terms')}>Conditions d’utilisation</button> · v4.6</footer>{legal&&<Legal type={legal} onClose={()=>setLegal(null)}/>}</main></div>}
-function Dashboard({totals:t,data,settings}){const ds=t.associesCalcules;const c=t.controle;return <><section className="hero"><div><span className="eyebrow">PILOTAGE FINANCIER</span><h2>Une lecture claire de votre activité.</h2><p>Les données sont synchronisées entre le propriétaire et l’associé.</p></div><button className="primary" onClick={()=>location.reload()}><RefreshCw size={16}/> Actualiser</button></section><div className="cards">{[['Capital global',t.capital,'info'],['Disponible (4 banques)',t.disponible,'orange'],['Gain net agence',t.gainNet,'green'],['Reste à rembourser',t.resteRemb,'red'],['On me doit',t.perso,'blue'],['Dettes',t.dettes,'red']].map(([l,v,k])=><div className={'card '+k} key={l}><span>{l}</span><strong>{money(v)}</strong></div>)}</div><section className="panel bank-panel"><div className="panel-head"><div><span className="eyebrow">TRÉSORERIE</span><h2>Soldes bancaires disponibles</h2></div><b>{money(t.banques)}</b></div><div className="bank-grid">{[['n26','N26'],['sparkasse','Sparkasse Bremen'],['commerzbank','Commerzbank'],['wise','Wise']].map(([k,l])=><div className="bank-card" key={k}><span>{l}</span><strong>{money(t.banqueDetails[k])}</strong></div>)}</div></section><section className="panel control"><div className="panel-head"><div><span className="eyebrow">CONTRÔLE DE COMPTE</span><h2>Solde de contrôle</h2></div><b className={c.resultat>0?'positive':c.resultat<0?'negative':'balanced'}>{c.resultat>0?'EXCÉDENT':c.resultat<0?'DÉFICIT':'ÉQUILIBRE'} · {money(c.resultat)}</b></div><div className="terms">{[['Banques',c.termes.banques],['Comptes bloqués',c.termes.comptesBloques],['Total associés',c.termes.totalAssocies],['Ce que je dois',c.termes.dettes],['Refus non remboursés',c.termes.refusNonRembourses],['Candidats en attente',c.termes.candidatsAttente]].map(([l,v])=><div key={l}><span>{l}</span><b>{money(v)}</b></div>)}</div><small>Formule : banques + comptes bloqués − total associés − dettes restantes (je dois) − refus non remboursés − candidats en attente</small></section><section className="panel control"><div className="panel-head"><div><span className="eyebrow">COHÉRENCE DU CAPITAL</span><h2>Test de solvabilité</h2></div><b className={t.solvabilite>=0?'positive':'negative'}>{t.solvabilite>=0?'COHÉRENT':'INSUFFISANT'} · {money(t.solvabilite)}</b></div><small>Capital global − soldes associés calculés (investissement de départ + dividendes, et excédent de contrôle pour l’associé 1) − total argent des candidats en cours.</small></section><section className="panel"><div className="panel-head"><div><span className="eyebrow">DIVIDENDES</span><h2>Part de chaque associé</h2></div></div><div className="dividend-grid">{t.gainNet<0&&<div className="error full">Déficit : aucun dividende n’est distribué.</div>}{ds.map((d,i)=><div className={'dividend d'+i} key={d.nom}><b>{d.nom}</b><span>{d.part}% de part · gain après visas/refus</span><strong>{money(d.gain)}</strong><small>{i===0&&d.excedentAttribue>0&&<small className="surplus-line">dont excédent attribué : <b>{money(d.excedentAttribue)}</b></small>}Solde ajusté après investissement : {money(d.nouveauSolde)}</small></div>)}</div></section><section className="panel"><div className="panel-head"><div><span className="eyebrow">SUIVI DES DOSSIERS</span><h2>Activité agence</h2></div></div><div className="mini-grid"><div><b>{t.nbCours}</b><span>En cours</span></div><div><b>{t.nbVisa}</b><span>Visas obtenus</span></div><div><b>{t.nbRefus}</b><span>Refus</span></div><div><b>{t.nbCandidats}</b><span>Candidats</span></div></div></section></>}
-function SettingsPanel({settings,onSave,online,onRefresh,onInstall}){const[s,setS]=useState(settings);return <section className="panel settings"><span className="eyebrow">CONFIGURATION</span><h2>Paramètres de l’agence</h2><p>Les investissements, soldes bancaires et logo sont conservés localement et synchronisés avec Supabase.</p><div className="form-grid"><label>Nom de l’agence<input value={s.agencyName} onChange={e=>setS({...s,agencyName:e.target.value})}/></label><label>Taux gardé sur un refus (%)<input type="number" step="0.01" value={s.pct_refus} onChange={e=>setS({...s,pct_refus:e.target.value})}/></label><label>Frais bancaires par compte bloqué visa (€)<input type="number" step="0.01" min="0" value={s.fraisBancairesCompteBloqueVisa??127} onChange={e=>setS({...s,fraisBancairesCompteBloqueVisa:e.target.value})}/></label>{[['n26','N26'],['sparkasse','Sparkasse Bremen'],['commerzbank','Commerzbank'],['wise','Wise']].map(([k,l])=><label key={k}>Solde {l}<input type="number" step="0.01" min="0" value={s[k]??0} onChange={e=>setS({...s,[k]:e.target.value})}/></label>)}{[1,2].map(i=><React.Fragment key={i}><label>Nom associé {i}<input value={s['associe'+i+'Nom']} onChange={e=>setS({...s,['associe'+i+'Nom']:e.target.value})}/></label><label>Investissement départ {i}<input type="number" step="0.01" value={s['associe'+i+'Investissement']} onChange={e=>setS({...s,['associe'+i+'Investissement']:e.target.value})}/></label><label>Part associé {i} (%)<input type="number" step="0.01" value={s['associe'+i+'Part']} onChange={e=>setS({...s,['associe'+i+'Part']:e.target.value})}/></label></React.Fragment>)}<label className="full">Logo (PNG, JPEG ou SVG)<input type="file" accept="image/*,.svg" onChange={e=>{const f=e.target.files?.[0];if(f){const r=new FileReader();r.onload=()=>setS({...s,logo:r.result});r.readAsDataURL(f)}}}/></label></div>{s.logo&&<img className="preview-logo" src={s.logo} alt="Aperçu du logo"/>}<div className="modal-actions"><button className="secondary" onClick={onRefresh}><RefreshCw size={16}/> Vérifier la base</button>{onInstall&&<button className="secondary" onClick={onInstall}><Download size={16}/> Installer l’application</button>}<button className="primary" onClick={()=>onSave(s)}>Enregistrer</button></div><p className="hint"><b>iPhone/iPad :</b> ouvrir dans Safari, toucher Partager puis « Sur l’écran d’accueil ». Mode actuel : {online?'en ligne':'hors ligne — file d’attente active'}.</p></section>}
-function TableView({table,rows,onAdd,onEdit,onDelete}){const cfg=TABLES[table];return <section className="panel table-panel"><div className="panel-head"><div><span className="eyebrow">REGISTRE</span><h2>{cfg.label}</h2></div><button className="primary" onClick={onAdd}><Plus size={17}/> Ajouter</button></div>{rows.length?<div className="table-wrap"><table><thead><tr>{cfg.fields.slice(0,7).map(f=><th key={f[0]}>{f[1]}</th>)}<th></th></tr></thead><tbody>{rows.map(row=><tr key={row.id}>{cfg.fields.slice(0,7).map(f=><td key={f[0]}>{f[0].includes('montant')||['montant','rembourse','commission','retire'].includes(f[0])?money(row[f[0]]):f[0]==='statut'?<span className={'pill '+row[f[0]]}>{row[f[0]]}</span>:(row[f[0]]||'—')}</td>)}<td className="actions"><button onClick={()=>onEdit(row)}><Pencil size={15}/></button><button onClick={()=>onDelete(row)}><Trash2 size={15}/></button></td></tr>)}</tbody></table></div>:<div className="empty">Aucune donnée. Ajoutez votre premier élément.</div>}</section>}
-function Editor({config,row,onClose,onSave}){const[form,setForm]=useState(row||{});return <div className="overlay"><form className="modal" onSubmit={e=>{e.preventDefault();onSave(form)}}><div className="panel-head"><div><span className="eyebrow">SAISIE</span><h2>{row?'Modifier':'Nouvel élément'}</h2></div><button type="button" className="close" onClick={onClose}>×</button></div><div className="form-grid">{config.fields.map(([k,l,type,opts])=><label key={k} className={k==='notes'?'full':''}>{l}{type==='select'?<select value={form[k]||opts[0]} onChange={e=>setForm({...form,[k]:e.target.value})}>{opts.map(o=><option key={o}>{o}</option>)}</select>:<input type={type||'text'} step="0.01" value={form[k]??''} onChange={e=>setForm({...form,[k]:e.target.value})}/>}</label>)}</div><div className="modal-actions"><button type="button" className="secondary" onClick={onClose}>Annuler</button><button className="primary">Enregistrer</button></div></form></div>}
-function Legal({type,onClose}){return <div className="overlay"><div className="modal legal"><div className="panel-head"><h2>{type==='privacy'?'Conditions de confidentialité':'Conditions d’utilisation'}</h2><button className="close" onClick={onClose}>×</button></div>{type==='privacy'?<><p>Les données saisies sont utilisées uniquement pour le suivi administratif et financier de l’agence. L’authentification et la synchronisation sont assurées par Supabase avec des règles d’accès par utilisateur. Le logo et les préférences d’affichage restent sur l’appareil.</p><p>Vous pouvez demander la correction ou la suppression de vos données auprès de l’administrateur de l’agence. Aucune donnée n’est vendue ni utilisée à des fins publicitaires.</p></>:<><p>L’application est un outil interne de suivi. Chaque utilisateur protège ses identifiants et vérifie les montants avant toute décision financière. L’accès peut être suspendu en cas d’usage abusif.</p><p>Les calculs affichés sont des indicateurs de gestion et ne remplacent pas un conseil juridique, fiscal ou comptable.</p></>}</div></div>}export default App;
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { LayoutDashboard, Settings as SettingsIcon, LogOut, Sun, Moon, Wifi, WifiOff, RefreshCw, X } from 'lucide-react';
+import { supabase } from './lib/supabase';
+import { totaux } from './lib/calculs';
+import { newId, enqueue, applyOp, flushQueue } from './lib/storage';
+import { normalizeSettings, readLocalSettings, saveLocalSettings, pushSettings, pullSettings } from './lib/settings';
+import { TABLES, EMPTY_DATA, cleanRow } from './lib/tables';
+import Logo from './components/Logo.jsx';
+import Login from './components/Login.jsx';
+import Dashboard from './components/Dashboard.jsx';
+import TableView from './components/TableView.jsx';
+import Editor from './components/Editor.jsx';
+import SettingsPanel from './components/SettingsPanel.jsx';
+import Legal from './components/Legal.jsx';
+
+const NAV = [
+  ['dashboard', 'Tableau de bord', 'Accueil', LayoutDashboard],
+  ...Object.entries(TABLES).map(([k, v]) => [k, v.label, v.short, v.icon]),
+  ['settings', 'Paramètres', 'Réglages', SettingsIcon]
+];
+const TITLES = { dashboard: 'Vue d’ensemble', settings: 'Paramètres' };
+
+export default function App() {
+  const [session, setSession] = useState(null);
+  const [data, setData] = useState(EMPTY_DATA);
+  const [tab, setTab] = useState('dashboard');
+  const [online, setOnline] = useState(navigator.onLine);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [modal, setModal] = useState(null);
+  const [notice, setNotice] = useState(null);
+  const [settings, setSettings] = useState(readLocalSettings);
+  const [theme, setTheme] = useState(() => localStorage.getItem('gestion-agence-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  const [installEvent, setInstallEvent] = useState(null);
+  const [legal, setLegal] = useState(null);
+  const loadedUid = useRef(null);
+  const uid = session?.user.id;
+
+  const notify = (text, tone = 'pos') => setNotice({ text, tone });
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem('gestion-agence-theme', theme);
+    document.querySelector('meta[name=theme-color]')?.setAttribute('content', theme === 'dark' ? '#0d1b22' : '#082f49');
+  }, [theme]);
+
+  useEffect(() => {
+    const h = e => { e.preventDefault(); setInstallEvent(e); };
+    addEventListener('beforeinstallprompt', h);
+    return () => removeEventListener('beforeinstallprompt', h);
+  }, []);
+
+  // Session : un seul chargement par utilisateur (les rafraîchissements de jeton ne rechargent plus l'écran).
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+      if (!s) { loadedUid.current = null; setData(EMPTY_DATA); }
+      else if (loadedUid.current !== s.user.id) { loadedUid.current = s.user.id; setTimeout(() => load(s.user.id), 0); }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const h = () => { setOnline(navigator.onLine); if (navigator.onLine && uid) load(uid, true); };
+    addEventListener('online', h); addEventListener('offline', h);
+    return () => { removeEventListener('online', h); removeEventListener('offline', h); };
+  }, [uid]);
+
+  // Retour au premier plan : on récupère ce qui a été saisi sur un autre appareil.
+  useEffect(() => {
+    const h = () => { if (document.visibilityState === 'visible' && navigator.onLine && uid && !modal && tab !== 'settings') load(uid, true); };
+    document.addEventListener('visibilitychange', h);
+    return () => document.removeEventListener('visibilitychange', h);
+  }, [uid, modal, tab]);
+
+  useEffect(() => {
+    if (!notice || notice.tone !== 'pos') return;
+    const t = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  async function load(userId, silent = false) {
+    if (silent) setRefreshing(true); else setLoading(true);
+    try {
+      const q = navigator.onLine ? await flushQueue(supabase) : { kept: 0, rejected: [] };
+      const tables = Object.keys(EMPTY_DATA);
+      const r = await Promise.all(tables.map(t => supabase.from(t).select('*').eq('user_id', userId)));
+      const failed = r.find(x => x.error);
+      if (failed) throw new Error(failed.error.message);
+      setData(Object.fromEntries(tables.map((t, i) => [t, r[i].data || []])));
+      const ps = await pullSettings(supabase, userId);
+      if (ps.settings) setSettings(ps.settings);
+      if (q.rejected.length) notify('Modifications hors ligne refusées par la base : ' + q.rejected[0], 'neg');
+      else if (q.kept) notify(q.kept + ' modification(s) hors ligne en attente d’envoi.', 'warn');
+      else if (ps.notice) notify(ps.notice, 'warn');
+      else if (!silent) notify('Données à jour.');
+    } catch (e) {
+      notify('Impossible de charger la base : ' + e.message, 'neg');
+    } finally {
+      setLoading(false); setRefreshing(false);
+    }
+  }
+
+  async function save(table, row) {
+    const clean = { ...cleanRow(table, row), id: row.id || newId(), user_id: uid };
+    setData(d => ({ ...d, [table]: d[table].some(x => x.id === clean.id) ? d[table].map(x => (x.id === clean.id ? clean : x)) : [...d[table], clean] }));
+    setModal(null);
+    const op = { table, kind: 'upsert', row: clean };
+    if (!online) { enqueue(op); notify('Enregistré hors ligne ; envoi au retour de la connexion.', 'warn'); return; }
+    const r = await applyOp(supabase, op);
+    if (r.network) { enqueue(op); notify('Connexion instable : modification gardée en attente d’envoi.', 'warn'); }
+    else if (r.error) notify('Enregistrement refusé par la base : ' + r.error, 'neg');
+    else notify('Enregistré.');
+  }
+
+  async function remove(table, row) {
+    if (!confirm('Supprimer cet élément ?')) return;
+    setData(d => ({ ...d, [table]: d[table].filter(x => x.id !== row.id) }));
+    const op = { table, kind: 'delete', row: { id: row.id } };
+    if (!online) { enqueue(op); return; }
+    const r = await applyOp(supabase, op);
+    if (r.network) enqueue(op);
+    else if (r.error) { notify('Suppression refusée par la base : ' + r.error, 'neg'); load(uid, true); }
+  }
+
+  async function saveSettings(raw) {
+    const next = normalizeSettings(raw);
+    setSettings(next);
+    const ts = saveLocalSettings(next, uid);
+    if (!online) { notify('Paramètres enregistrés sur cet appareil ; ils seront envoyés au retour de la connexion.', 'warn'); return; }
+    const r = await pushSettings(supabase, uid, next, ts);
+    if (r.error) notify('Paramètres enregistrés sur cet appareil seulement — synchronisation impossible : ' + r.error, 'neg');
+    else notify('Paramètres enregistrés et synchronisés sur tous vos appareils.');
+  }
+
+  const totals = useMemo(() => totaux({ ...data, parametres: settings }), [data, settings]);
+
+  if (!session) return <Login settings={settings} />;
+  if (loading) return <div className="loading"><RefreshCw className="spin" size={22} /> Chargement de vos données…</div>;
+
+  return (
+    <div className="app">
+      <aside>
+        <div className="side-brand"><Logo settings={settings} small /><b>{settings.agencyName}</b></div>
+        <nav aria-label="Navigation principale">
+          {NAV.map(([k, label, short, Icon]) => (
+            <button className={tab === k ? 'nav active' : 'nav'} onClick={() => setTab(k)} key={k} aria-current={tab === k ? 'page' : undefined}>
+              <Icon size={20} /><span className="nav-long">{label}</span><span className="nav-short">{short}</span>
+            </button>
+          ))}
+        </nav>
+        <button className="nav nav-logout" onClick={() => supabase.auth.signOut()}><LogOut size={20} /><span className="nav-long">Déconnexion</span></button>
+      </aside>
+
+      <main className="content">
+        <header className="topbar">
+          <div><span className="eyebrow">{settings.agencyName}</span><h1>{TITLES[tab] || TABLES[tab].label}</h1></div>
+          <div className="header-actions">
+            <span className={online ? 'status' : 'status off'} title={online ? 'En ligne' : 'Hors ligne'}>{online ? <Wifi size={15} /> : <WifiOff size={15} />}<span>{online ? 'En ligne' : 'Hors ligne'}</span></span>
+            <button className="icon-btn" onClick={() => load(uid, true)} disabled={!online || refreshing} aria-label="Actualiser les données"><RefreshCw size={18} className={refreshing ? 'spin' : ''} /></button>
+            <button className="icon-btn" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Passer en mode clair' : 'Passer en mode sombre'}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button>
+          </div>
+        </header>
+
+        {notice && (
+          <div className={'alert ' + notice.tone} role="status">
+            <span>{notice.text}</span>
+            <button className="alert-close" onClick={() => setNotice(null)} aria-label="Fermer le message"><X size={16} /></button>
+          </div>
+        )}
+
+        {tab === 'dashboard' ? <Dashboard totals={totals} />
+          : tab === 'settings' ? (
+            <SettingsPanel
+              settings={settings} email={session.user.email} online={online} onSave={saveSettings}
+              onRefresh={() => load(uid, true)} onSignOut={() => supabase.auth.signOut()}
+              onInstall={installEvent ? async () => { await installEvent.prompt(); setInstallEvent(null); } : null}
+            />
+          ) : (
+            <TableView
+              key={tab} table={tab} rows={data[tab]} settings={settings}
+              onAdd={() => setModal({ table: tab })} onEdit={row => setModal({ table: tab, row })} onDelete={row => remove(tab, row)}
+            />
+          )}
+
+        {modal && <Editor config={TABLES[modal.table]} row={modal.row} onClose={() => setModal(null)} onSave={row => save(modal.table, row)} />}
+
+        <footer>
+          © {new Date().getFullYear()} {settings.agencyName} · <button onClick={() => setLegal('privacy')}>Confidentialité</button> · <button onClick={() => setLegal('terms')}>Conditions d’utilisation</button> · v4.7
+        </footer>
+        {legal && <Legal type={legal} onClose={() => setLegal(null)} />}
+      </main>
+    </div>
+  );
+}
