@@ -28,4 +28,4 @@ Sécurité du partage : l’accès est accordé à l’email du compte connecté
 - `tests/` : `npm test` (formules, synchronisation, choix de l’agence).
 
 ## Calculs métier
-Voir `FORMULES.md` pour les définitions exactes.
+Toutes les formules sont définies dans `FORMULES.md` et implémentées dans `src/lib/calculs.js`.
