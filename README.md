@@ -1,4 +1,4 @@
-# Gestion Agence · v4.8
+# Gestion Agence · v4.9
 
 Application React + Vite, PWA et Supabase pour le suivi des comptes bloqués, candidats, prêts personnels et dettes.
 
@@ -10,12 +10,20 @@ npm test
 npm run build
 ```
 
-## Mise à jour v4.8 — à faire une fois
-1. Dans Supabase → SQL Editor, exécuter `schema.sql` en entier (idempotent, peut être relancé sans risque).
-2. Ouvrir l’application sur l’appareil qui contient les bons montants → Paramètres → **Enregistrer**.
-3. Pour l’associé : Paramètres → **Accès de l’associé** → saisir l’email de son compte. Il se connecte ensuite avec ses propres identifiants.
+## Mise en ligne
+1. Fusionner la pull request dans `main` : Netlify reconstruit et publie le site automatiquement.
+2. Sur l’appareil qui contient les bons montants : Paramètres → **Enregistrer**. Tous les appareils connectés au même compte les reçoivent.
+3. Facultatif mais recommandé : dans Supabase → SQL Editor, exécuter `schema.sql` en entier (idempotent). C’est nécessaire uniquement pour **partager l’agence avec l’associé** ; sans cela les paramètres sont enregistrés dans le profil du compte et se synchronisent quand même.
 
-Sécurité du partage : l’accès est accordé à l’email du compte connecté. Dans Supabase → Authentication, gardez la confirmation d’email activée (ou les inscriptions publiques désactivées) pour que personne ne puisse créer un compte avec l’email de l’associé à sa place.
+Sécurité du partage : l’accès est accordé à l’email du compte connecté. Dans Supabase → Authentication, gardez la confirmation d’email activée (ou les inscriptions publiques désactivées).
+
+## Identité
+Le nom (« Gestion Agence ») et le logo sont livrés avec l’application : `src/lib/app.js` et `public/logo.svg`. Pour changer de logo, remplacer ce fichier.
+
+## Anti-pause Supabase
+Un projet Supabase gratuit est mis en pause après environ 7 jours sans activité. Deux mécanismes indépendants font une petite lecture dans la base :
+- `netlify/functions/keepalive.mjs` — fonction planifiée Netlify, tous les jours ;
+- `.github/workflows/keepalive.yml` — GitHub Actions, deux fois par semaine (GitHub désactive les tâches planifiées d’un dépôt resté 60 jours sans activité : la fonction Netlify reste alors seule).
 
 ## Synchronisation et hors ligne
 - Paramètres et dossiers sont stockés par agence dans Supabase et partagés entre les appareils et avec l’associé invité (lecture seule ou modification).

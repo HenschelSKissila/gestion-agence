@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { RefreshCw, Download, LogOut, Save, UserPlus, Trash2 } from 'lucide-react';
-import { fileToLogo } from '../lib/settings';
 
 const BANKS = [['n26', 'N26'], ['sparkasse', 'Sparkasse Bremen'], ['commerzbank', 'Commerzbank'], ['wise', 'Wise']];
 const shown = v => (typeof v === 'number' ? Math.round(v * 100) / 100 : v ?? '');
@@ -72,17 +71,12 @@ export default function SettingsPanel({ settings, email, online, workspace, uid,
       <form onSubmit={e => { e.preventDefault(); onSave(s); }}>
         <fieldset disabled={locked}>
           <section className="panel">
-            <span className="eyebrow">Agence</span><h2>Identité et règles</h2>
+            <span className="eyebrow">Règles</span><h2>Refus, frais et commissions</h2>
             <div className="form-grid">
-              <label>Nom de l’agence<input value={s.agencyName} onChange={e => set('agencyName', e.target.value)} /></label>
               {numField('pct_refus', 'Taux gardé sur un refus (%)', { max: '100' })}
               {numField('fraisBancairesCompteBloqueVisa', 'Frais par compte bloqué visa (€)')}
-              <label>Logo (PNG, JPEG ou SVG)
-                <input type="file" accept="image/*,.svg" onChange={e => { const f = e.target.files?.[0]; if (f) fileToLogo(f).then(logo => set('logo', logo)).catch(() => {}); }} />
-              </label>
               <label className="check full"><input type="checkbox" checked={s.commissionSurRefus !== false} onChange={e => set('commissionSurRefus', e.target.checked)} /> La commission du démarcheur est due aussi en cas de refus</label>
             </div>
-            {s.logo && <div className="logo-row"><img className="preview-logo" src={s.logo} alt="Aperçu du logo" /><button type="button" className="btn ghost" onClick={() => set('logo', '')}>Retirer le logo</button></div>}
           </section>
 
           <section className="panel">
@@ -103,7 +97,7 @@ export default function SettingsPanel({ settings, email, online, workspace, uid,
         </fieldset>
 
         <div className="save-bar">
-          <span className="muted">{locked ? 'Lecture seule : seul le propriétaire peut modifier ces paramètres.' : online ? 'Enregistré dans Supabase et partagé entre vos appareils.' : 'Hors ligne : envoi automatique au retour de la connexion.'}</span>
+          <span className="muted">{locked ? 'Lecture seule : seul le propriétaire peut modifier ces paramètres.' : online ? 'Les montants sont partagés avec tous les appareils connectés à ce compte.' : 'Hors ligne : envoi automatique au retour de la connexion.'}</span>
           {!locked && <button className="btn primary"><Save size={16} /> Enregistrer</button>}
         </div>
       </form>
@@ -114,7 +108,7 @@ export default function SettingsPanel({ settings, email, online, workspace, uid,
         <span className="eyebrow">Compte</span><h2>Application</h2>
         {email && <p className="muted">Connecté en tant que <b>{email}</b></p>}
         <div className="button-row">
-          <button type="button" className="btn secondary" onClick={onRefresh}><RefreshCw size={16} /> Vérifier la base</button>
+          <button type="button" className="btn secondary" onClick={onRefresh}><RefreshCw size={16} /> Synchroniser maintenant</button>
           {onInstall && <button type="button" className="btn secondary" onClick={onInstall}><Download size={16} /> Installer l’application</button>}
           <button type="button" className="btn danger" onClick={onSignOut}><LogOut size={16} /> Déconnexion</button>
         </div>

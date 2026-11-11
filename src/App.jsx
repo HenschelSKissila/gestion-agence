@@ -1,12 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { LayoutDashboard, Settings as SettingsIcon, LogOut, Sun, Moon, Wifi, WifiOff, RefreshCw, X } from 'lucide-react';
+import { LayoutDashboard, Settings as SettingsIcon, LogOut, Sun, Moon, RefreshCw } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { totaux } from './lib/calculs';
 import { newId, enqueue, applyOp, flushQueue, readQueue } from './lib/storage';
 import { normalizeSettings, readLocalSettings, saveLocalSettings, pushSettings, pullSettings } from './lib/settings';
 import { TABLES, EMPTY_DATA, cleanRow } from './lib/tables';
 import { ownWorkspace, cachedWorkspace, resolveWorkspace, preferWorkspace, addMember, removeMember, readDataCache, writeDataCache, clearLocalData } from './lib/workspace';
+import { APP_NAME, APP_VERSION } from './lib/app';
 import Logo from './components/Logo.jsx';
+import SyncStatus from './components/SyncStatus.jsx';
+import Toasts from './components/Toasts.jsx';
 import Login from './components/Login.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import TableView from './components/TableView.jsx';
@@ -29,7 +32,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [modal, setModal] = useState(null);
-  const [notice, setNotice] = useState(null);
+  const [toasts, setToasts] = useState([]);
+  const [pending, setPending] = useState(() => readQueue().length);
+  const [syncError, setSyncError] = useState('');
   const [settings, setSettings] = useState(readLocalSettings);
   const [theme, setTheme] = useState(() => localStorage.getItem('gestion-agence-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
   const [installEvent, setInstallEvent] = useState(null);
@@ -40,7 +45,14 @@ export default function App() {
   const wid = workspace?.id;
   const canEdit = workspace?.canEdit !== false;
 
-  const notify = (text, tone = 'pos') => setNotice({ text, tone });
+  // Messages brefs qui disparaissent seuls ; l'état de la synchronisation est porté par le voyant d'en-tête.
+  const dismiss = id => setToasts(list => list.filter(t => t.id !== id));
+  function notify(text, tone = 'pos') {
+    const id = newId();
+    setToasts(list => [...list.filter(t => t.text !== text).slice(-2), { id, text, tone }]);
+    setTimeout(() => dismiss(id), tone === 'pos' ? 2500 : 6000);
+  }
+  const refreshPending = () => setPending(readQueue().length);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -77,12 +89,6 @@ export default function App() {
     return () => document.removeEventListener('visibilitychange', h);
   }, [uid, modal, tab]);
 
-  useEffect(() => {
-    if (!notice || notice.tone !== 'pos') return;
-    const t = setTimeout(() => setNotice(null), 4000);
-    return () => clearTimeout(t);
-  }, [notice]);
-
   // Copie locale : chaque changement des dossiers est gardé pour une ouverture sans réseau.
   useEffect(() => { if (wid && !loading) writeDataCache(wid, data); }, [wid, data, loading]);
 
@@ -105,18 +111,17 @@ export default function App() {
       if (failed) throw new Error(failed.error.message);
       setWorkspace(ws);
       setData(Object.fromEntries(tables.map((t, i) => [t, r[i].data || []])));
-      const ps = await pullSettings(supabase, ws.id);
+      const ps = await pullSettings(supabase, ws.id, { own: ws.own });
       if (ps.settings) setSettings(ps.settings);
-      if (q.rejected.length) notify('Modifications hors ligne refusées par la base : ' + q.rejected[0], 'neg');
-      else if (q.kept) notify(q.kept + ' modification(s) hors ligne en attente d’envoi.', 'warn');
+      setSyncError('');
+      if (q.rejected.length) notify('Modification hors ligne refusée : ' + q.rejected[0], 'neg');
       else if (ps.notice && ws.canEdit) notify(ps.notice, 'warn');
-      else if (!silent) notify('Données à jour.');
     } catch (e) {
       setWorkspace(w => w || cachedWorkspace(userId) || ownWorkspace(userId));
-      if (shown && !navigator.onLine) notify('Hors ligne : affichage des dernières données enregistrées sur cet appareil.', 'warn');
-      else notify('Impossible de charger la base : ' + e.message, 'neg');
+      // Hors ligne avec une copie locale : le voyant « Hors ligne » suffit, aucun message.
+      if (navigator.onLine || !shown) setSyncError(e.message);
     } finally {
-      setLoading(false); setRefreshing(false);
+      refreshPending(); setLoading(false); setRefreshing(false);
     }
   }
 
@@ -147,9 +152,9 @@ export default function App() {
     setData(d => ({ ...d, [table]: d[table].some(x => x.id === clean.id) ? d[table].map(x => (x.id === clean.id ? clean : x)) : [...d[table], clean] }));
     setModal(null);
     const op = { table, kind: 'upsert', row: clean };
-    if (!online) { enqueue(op); notify('Enregistré hors ligne ; envoi au retour de la connexion.', 'warn'); return; }
+    if (!online) { enqueue(op); refreshPending(); return; }
     const r = await applyOp(supabase, op);
-    if (r.network) { enqueue(op); notify('Connexion instable : modification gardée en attente d’envoi.', 'warn'); }
+    if (r.network) { enqueue(op); refreshPending(); }
     else if (r.error) notify('Enregistrement refusé par la base : ' + r.error, 'neg');
     else notify('Enregistré.');
   }
@@ -158,9 +163,9 @@ export default function App() {
     if (!confirm('Supprimer cet élément ?')) return;
     setData(d => ({ ...d, [table]: d[table].filter(x => x.id !== row.id) }));
     const op = { table, kind: 'delete', row: { id: row.id } };
-    if (!online) { enqueue(op); return; }
+    if (!online) { enqueue(op); refreshPending(); return; }
     const r = await applyOp(supabase, op);
-    if (r.network) enqueue(op);
+    if (r.network) { enqueue(op); refreshPending(); }
     else if (r.error) { notify('Suppression refusée par la base : ' + r.error, 'neg'); load(uid, true); }
   }
 
@@ -168,21 +173,21 @@ export default function App() {
     const next = normalizeSettings(raw);
     setSettings(next);
     const ts = saveLocalSettings(next, wid);
-    if (!online) { notify('Paramètres enregistrés sur cet appareil ; ils seront envoyés au retour de la connexion.', 'warn'); return; }
-    const r = await pushSettings(supabase, wid, next, ts);
-    if (r.error) notify('Paramètres enregistrés sur cet appareil seulement — synchronisation impossible : ' + r.error, 'neg');
-    else notify('Paramètres enregistrés et synchronisés.');
+    if (!online) { notify('Enregistré ; envoi au retour de la connexion.', 'warn'); return; }
+    const r = await pushSettings(supabase, wid, next, ts, { own: workspace?.own !== false });
+    if (r.error) notify('Enregistré sur cet appareil seulement : ' + r.error, 'neg');
+    else notify('Paramètres enregistrés.');
   }
 
   const totals = useMemo(() => totaux({ ...data, parametres: settings }), [data, settings]);
 
-  if (!session) return <Login settings={settings} />;
+  if (!session) return <Login />;
   if (loading) return <div className="loading"><RefreshCw className="spin" size={22} /> Chargement de vos données…</div>;
 
   return (
     <div className="app">
       <aside>
-        <div className="side-brand"><Logo settings={settings} small /><b>{settings.agencyName}</b></div>
+        <div className="side-brand"><Logo small /><b>{APP_NAME}</b></div>
         <nav aria-label="Navigation principale">
           {NAV.map(([k, label, short, Icon]) => (
             <button className={tab === k ? 'nav active' : 'nav'} onClick={() => setTab(k)} key={k} aria-current={tab === k ? 'page' : undefined}>
@@ -195,20 +200,12 @@ export default function App() {
 
       <main className="content">
         <header className="topbar">
-          <div><span className="eyebrow">{settings.agencyName}{workspace && !workspace.own ? ` · partagé par ${workspace.ownerEmail}` : ''}</span><h1>{TITLES[tab] || TABLES[tab].label}</h1></div>
+          <div><span className="eyebrow">{APP_NAME}{workspace && !workspace.own ? ` · partagé par ${workspace.ownerEmail}` : ''}</span><h1>{TITLES[tab] || TABLES[tab].label}</h1></div>
           <div className="header-actions">
-            <span className={online ? 'status' : 'status off'} title={online ? 'En ligne' : 'Hors ligne'}>{online ? <Wifi size={15} /> : <WifiOff size={15} />}<span>{online ? 'En ligne' : 'Hors ligne'}</span></span>
-            <button className="icon-btn" onClick={() => load(uid, true)} disabled={!online || refreshing} aria-label="Actualiser les données"><RefreshCw size={18} className={refreshing ? 'spin' : ''} /></button>
+            <SyncStatus online={online} busy={refreshing} pending={pending} error={syncError} onSync={() => load(uid, true)} />
             <button className="icon-btn" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Passer en mode clair' : 'Passer en mode sombre'}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button>
           </div>
         </header>
-
-        {notice && (
-          <div className={'alert ' + notice.tone} role="status">
-            <span>{notice.text}</span>
-            <button className="alert-close" onClick={() => setNotice(null)} aria-label="Fermer le message"><X size={16} /></button>
-          </div>
-        )}
 
         {tab === 'dashboard' ? <Dashboard totals={totals} />
           : tab === 'settings' ? (
@@ -228,9 +225,10 @@ export default function App() {
         {modal && <Editor config={TABLES[modal.table]} row={modal.row} onClose={() => setModal(null)} onSave={row => save(modal.table, row)} />}
 
         <footer>
-          © {new Date().getFullYear()} {settings.agencyName} · <button onClick={() => setLegal('privacy')}>Confidentialité</button> · <button onClick={() => setLegal('terms')}>Conditions d’utilisation</button> · v4.8
+          © {new Date().getFullYear()} {APP_NAME} · <button onClick={() => setLegal('privacy')}>Confidentialité</button> · <button onClick={() => setLegal('terms')}>Conditions d’utilisation</button> · v{APP_VERSION}
         </footer>
         {legal && <Legal type={legal} onClose={() => setLegal(null)} />}
+        <Toasts toasts={toasts} onDismiss={dismiss} />
       </main>
     </div>
   );

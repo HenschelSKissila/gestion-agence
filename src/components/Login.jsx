@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { LogIn } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import Logo from './Logo.jsx';
+import { APP_NAME, APP_VERSION } from '../lib/app';
 
-export default function Login({ settings }) {
+export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -21,8 +22,8 @@ export default function Login({ settings }) {
   return (
     <main className="login">
       <div className="login-card">
-        <Logo settings={settings} />
-        <p className="eyebrow">{settings.agencyName} · v4.8</p>
+        <Logo />
+        <p className="eyebrow">{APP_NAME} · v{APP_VERSION}</p>
         <h1>Votre agence, en clair.</h1>
         <p className="muted">Dossiers, capital et remboursements réunis au même endroit, sur tous vos appareils.</p>
         <form onSubmit={submit}>
