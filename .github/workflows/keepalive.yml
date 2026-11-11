@@ -1,0 +1,22 @@
+# Anti-pause Supabase (seconde sécurité, indépendante de Netlify) :
+# une petite lecture dans la base deux fois par semaine suffit à garder le projet actif.
+name: Supabase keepalive
+on:
+  schedule:
+    - cron: '43 4 * * 1,4'
+  workflow_dispatch:
+permissions: {}
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Lecture dans Supabase
+        env:
+          SUPABASE_URL: https://cnmnqfeihfrwtixjjwpi.supabase.co
+          SUPABASE_KEY: sb_publishable_iVoNU6d1oIc-O5g96gXtdA_nT9WPxj_
+        run: |
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --retry 3 \
+            -H "apikey: $SUPABASE_KEY" -H "Authorization: Bearer $SUPABASE_KEY" \
+            "$SUPABASE_URL/rest/v1/comptes?select=id&limit=1")
+          echo "HTTP $code"
+          test "$code" = "200"
