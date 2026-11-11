@@ -20,7 +20,7 @@ export const DEFAULTS = {
   commerzbank: 0,
   wise: 0,
   fraisBancairesCompteBloqueVisa: 127,
-  commissionSurRefus: true
+  commissionSurRefus: false
 };
 
 export const SETTINGS_TABLE = 'parametres_utilisateur';

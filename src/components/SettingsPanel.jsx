@@ -75,7 +75,7 @@ export default function SettingsPanel({ settings, email, online, workspace, uid,
             <div className="form-grid">
               {numField('pct_refus', 'Taux gardé sur un refus (%)', { max: '100' })}
               {numField('fraisBancairesCompteBloqueVisa', 'Frais par compte bloqué visa (€)')}
-              <label className="check full"><input type="checkbox" checked={s.commissionSurRefus !== false} onChange={e => set('commissionSurRefus', e.target.checked)} /> La commission du démarcheur est due aussi en cas de refus</label>
+              <label className="check full"><input type="checkbox" checked={s.commissionSurRefus === true} onChange={e => set('commissionSurRefus', e.target.checked)} /> La commission du démarcheur est due aussi en cas de refus</label>
             </div>
           </section>
 

@@ -5,6 +5,7 @@ import { totaux } from './lib/calculs';
 import { newId, enqueue, applyOp, flushQueue, readQueue } from './lib/storage';
 import { normalizeSettings, readLocalSettings, saveLocalSettings, pushSettings, pullSettings } from './lib/settings';
 import { TABLES, EMPTY_DATA, cleanRow } from './lib/tables';
+import { gainsParMois } from './lib/stats';
 import { ownWorkspace, cachedWorkspace, resolveWorkspace, preferWorkspace, addMember, removeMember, readDataCache, writeDataCache, clearLocalData } from './lib/workspace';
 import { APP_NAME, APP_VERSION } from './lib/app';
 import Logo from './components/Logo.jsx';
@@ -180,6 +181,7 @@ export default function App() {
   }
 
   const totals = useMemo(() => totaux({ ...data, parametres: settings }), [data, settings]);
+  const gains = useMemo(() => gainsParMois(data.comptes, settings), [data.comptes, settings]);
 
   if (!session) return <Login />;
   if (loading) return <div className="loading"><RefreshCw className="spin" size={22} /> Chargement de vos données…</div>;
@@ -207,7 +209,7 @@ export default function App() {
           </div>
         </header>
 
-        {tab === 'dashboard' ? <Dashboard totals={totals} />
+        {tab === 'dashboard' ? <Dashboard totals={totals} gains={gains} />
           : tab === 'settings' ? (
             <SettingsPanel
               settings={settings} email={session.user.email} online={online} onSave={saveSettings}

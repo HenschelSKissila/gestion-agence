@@ -38,9 +38,10 @@ groupe('refus : part gardée, remboursement, commission', () => {
   eq(calcCompte({ statut: 'refus', montant_client: 3000 }, p).a_rembourser, 2000);
   eq(calcCompte({ statut: 'refus', montant_client: 3000, montant_rembourse: 500 }, p).reste_rembourser, 1500);
   eq(calcCompte({ statut: 'refus', montant_client: 3000, montant_rembourse: 9999 }, p).reste_rembourser, 0);
-  eq(calcCompte({ statut: 'refus', montant_client: 3000, commission: 200 }, p).gain, 800);
-  eq(calcCompte({ statut: 'refus', montant_client: 3000, commission: 5000 }, p).gain, 0); // plafonnée à la part gardée
-  eq(calcCompte({ statut: 'refus', montant_client: 3000, commission: 200 }, { ...p, commissionSurRefus: false }).gain, 1000);
+  eq(calcCompte({ statut: 'refus', montant_client: 3000, commission: 200 }, p).gain, 1000); // par défaut : pas de commission sur un refus
+  const avec = { ...p, commissionSurRefus: true };
+  eq(calcCompte({ statut: 'refus', montant_client: 3000, commission: 200 }, avec).gain, 800);
+  eq(calcCompte({ statut: 'refus', montant_client: 3000, commission: 5000 }, avec).gain, 0); // plafonnée à la part gardée
   eq(calcCompte({ statut: 'refus', montant_client: 3000 }, { pct_refus: '' }).garde_refus, 1000); // taux vide -> défaut
   eq(calcCompte({ statut: 'refus', montant_client: 3000 }, { pct_refus: 0 }).garde_refus, 0);
 });
@@ -150,3 +151,20 @@ groupe('identité comptable sur données aléatoires', () => {
 });
 
 console.log(`calculs.test.js: ${groupes} groupes OK`);
+
+// Graphique « gain par mois » : mêmes gains que calcCompte, regroupés par mois de dépôt.
+{
+  const { gainsParMois, axisTicks } = await import('../src/lib/stats.js');
+  const g = gainsParMois([
+    { id: '1', statut: 'visa', date_depot: '2026-09-01', montant_client: 3000, commission: 200, montant_bloque: 11904 },
+    { id: '2', statut: 'refus', date_depot: '2026-09-20', montant_client: 3000 },
+    { id: '3', statut: 'visa', date_depot: '2026-10-02', montant_client: 100, commission: 200, montant_bloque: 11904 },
+    { id: '4', statut: 'en_cours', date_depot: '2026-10-05', montant_client: 1500 },
+    { id: '5', statut: 'visa', montant_client: 500 }
+  ], {});
+  assert.deepEqual(g.mois, [{ mois: '2026-09', gain: 3673, visas: 1, refus: 1 }, { mois: '2026-10', gain: -127, visas: 1, refus: 0 }]);
+  assert.equal(g.sansDate, 1);
+  assert.deepEqual(axisTicks(-127, 3673), [-1000, 0, 1000, 2000, 3000, 4000]);
+  assert.deepEqual(axisTicks(0, 0), [0, 1]);
+  console.log('stats : gains par mois OK');
+}

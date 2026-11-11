@@ -72,7 +72,7 @@ function compteCents(c = {}, p = {}) {
   } else if (refus) {
     garde = Math.round(client * pctRefus(p) / 100);
     aRembourser = client - garde;
-    commission = p?.commissionSurRefus === false ? 0 : Math.min(garde, commissionSaisie);
+    commission = p?.commissionSurRefus === true ? Math.min(garde, commissionSaisie) : 0; // par défaut : commission due sur visa seulement
     gain = garde - commission;
   }
   return {

@@ -1,4 +1,4 @@
-# Formules financières — v4.8
+# Formules financières — v4.9
 
 Source unique : `src/lib/calculs.js`, vérifiée par `tests/calculs.test.js` (`npm test`).
 
@@ -18,7 +18,7 @@ Règles générales :
 | **Gain visa** | `montant_client − commission − frais visa` (peut être négatif) |
 | Part gardée (refus) | `montant_client × taux_gardé / 100` |
 | À rembourser (refus) | `montant_client − part gardée` ; reste = `max(0, à rembourser − déjà remboursé)` |
-| Commission (refus) | `min(part gardée, commission_saisie)` si l'option « commission due aussi en cas de refus » est cochée, sinon 0 |
+| Commission (refus) | 0 par défaut (commission due sur visa seulement) ; `min(part gardée, commission_saisie)` si l'option « commission due aussi en cas de refus » est cochée |
 | **Gain refus** | `part gardée − commission` |
 | Acompte (en cours) | `montant_client` : dû au client tant que le dossier n'est pas tranché ; gain = 0 |
 
@@ -40,7 +40,7 @@ Règles générales :
 1. Les résultats négatifs ne sont plus ramenés à 0 : « Déficit » et « Insuffisant » peuvent enfin s'afficher.
 2. Le gain n'est plus compté deux fois : le solde de contrôle retire le gain à distribuer avant d'attribuer l'excédent à l'associé 1.
 3. Les frais visa (127 €) sont déduits du gain du dossier, plus seulement du compte bloqué.
-4. La commission est déduite aussi sur un refus (option désactivable dans Paramètres).
+4. La commission peut être déduite aussi sur un refus (option dans Paramètres, désactivée par défaut).
 5. L'argent versé par un client « en cours » est compté comme dû.
 6. Le capital global soustrait les refus non remboursés, les acomptes en cours et l'argent des candidats ; le contrôle inclut les prêts perso.
 7. « Candidats en cours » = attente + prochain, partout.

@@ -23,8 +23,8 @@ function backend({ table = true } = {}) {
 const { normalizeSettings, readLocalSettings, saveLocalSettings, pushSettings, pullSettings, DEFAULTS } = await import('../src/lib/settings.js');
 
 // Normalisation : texte -> nombre, clés inconnues ignorées, valeurs invalides -> défaut.
-const n = normalizeSettings({ n26: '1500,50', wise: '', associe1Investissement: '2000', inconnu: 1, agencyName: 'X', logo: 'data:', fraisBancairesCompteBloqueVisa: 'abc', commissionSurRefus: false });
-assert.equal(n.n26, 1500.5); assert.equal(n.wise, 0); assert.equal(n.associe1Investissement, 2000); assert.equal(n.fraisBancairesCompteBloqueVisa, 127); assert.equal(n.commissionSurRefus, false);
+const n = normalizeSettings({ n26: '1500,50', wise: '', associe1Investissement: '2000', inconnu: 1, agencyName: 'X', logo: 'data:', fraisBancairesCompteBloqueVisa: 'abc', commissionSurRefus: 'true' });
+assert.equal(n.n26, 1500.5); assert.equal(n.wise, 0); assert.equal(n.associe1Investissement, 2000); assert.equal(n.fraisBancairesCompteBloqueVisa, 127); assert.equal(n.commissionSurRefus, true); assert.equal(DEFAULTS.commissionSurRefus, false);
 for (const k of ['inconnu', 'agencyName', 'logo']) assert.equal(k in n, false);
 assert.equal(DEFAULTS.fraisBancairesCompteBloqueVisa, 127);
 

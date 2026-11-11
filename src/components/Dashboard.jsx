@@ -1,5 +1,6 @@
 import React from 'react';
 import { money, pct } from '../lib/format';
+import { GainsChart, StatutBar } from './Charts.jsx';
 
 const BANKS = [['n26', 'N26'], ['sparkasse', 'Sparkasse Bremen'], ['commerzbank', 'Commerzbank'], ['wise', 'Wise']];
 
@@ -21,7 +22,7 @@ function Statement({ lines, total }) {
   );
 }
 
-export default function Dashboard({ totals: t }) {
+export default function Dashboard({ totals: t, gains }) {
   const c = t.controle;
   const ds = t.associesCalcules;
   const kState = c.resultat > 0 ? ['pos', 'Excédent'] : c.resultat < 0 ? ['neg', 'Déficit'] : ['neutral', 'Équilibre'];
@@ -69,12 +70,21 @@ export default function Dashboard({ totals: t }) {
               <div className="tile center" key={label}><strong>{n}</strong><span>{label}</span></div>
             ))}
           </div>
+          <StatutBar parts={[{ label: 'En cours', value: t.nbCours, slot: 1 }, { label: 'Visas', value: t.nbVisa, slot: 3 }, { label: 'Refus', value: t.nbRefus, slot: 2 }]} />
           <dl className="mini spaced">
             <div><dt>Commissions démarcheurs</dt><dd>{money(t.commissions)}</dd></div>
             <div><dt>Frais visa sur comptes bloqués</dt><dd>{money(t.fraisVisa)}</dd></div>
           </dl>
         </section>
       </div>
+
+      <section className="panel">
+        <div className="panel-head">
+          <div><span className="eyebrow">Évolution</span><h2>Gain net par mois de dépôt</h2></div>
+          <b className="figure">{money(t.gainNet)}</b>
+        </div>
+        <GainsChart data={gains} />
+      </section>
 
       <div className="grid-2">
         <section className="panel">

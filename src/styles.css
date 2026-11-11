@@ -292,3 +292,33 @@ label.check input { width: 18px; height: 18px; padding: 0; flex: none; accent-co
 [data-theme=dark] .record, [data-theme=dark] .tile, [data-theme=dark] .dividend, [data-theme=dark] .member-list li { border: 1px solid #33505b; }
 [data-theme=dark] .dividend { border-top: 4px solid var(--info); }
 [data-theme=dark] .dividend.d1 { border-top-color: var(--warn); }
+
+/* ---------- v4.9 : graphiques ---------- */
+:root { --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --viz-grid: #e3e9ec; --viz-base: #b4c2c8; }
+[data-theme=dark] { --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --viz-grid: #2c444e; --viz-base: #5d7782; }
+.viz { margin: 0; }
+.viz-plot { position: relative; }
+.viz-plot svg { display: block; max-width: 100%; overflow: visible; }
+.viz-grid { stroke: var(--viz-grid); stroke-width: 1; }
+.viz-base { stroke: var(--viz-base); stroke-width: 1; }
+.viz-tick { fill: var(--text-2); font-size: 11px; font-variant-numeric: tabular-nums; }
+.viz-value { fill: var(--text); font-size: 12px; font-weight: 700; }
+.viz-bar { fill: var(--series-1); transition: opacity .12s; }
+.viz-bar.dim { opacity: .45; }
+.viz-plot rect:focus-visible { outline: 2px solid #f2ac55; outline-offset: -2px; }
+.viz-tip { position: absolute; top: 0; pointer-events: none; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); padding: 8px 10px; font-size: 12px; white-space: nowrap; display: grid; gap: 2px; z-index: 2; }
+.viz-tip span { font-size: 15px; font-weight: 800; }
+.viz-tip small { color: var(--text-2); }
+.viz-table { margin-top: 10px; font-size: 13px; }
+.viz-table summary { cursor: pointer; color: var(--accent-text); font-weight: 600; width: fit-content; }
+.viz-table table { margin-top: 8px; }
+.viz-table th, .viz-table td { padding: 8px 12px; }
+.viz-table th:first-child, .viz-table td:first-child { padding-left: 12px; }
+.empty.small { padding: 22px 10px; }
+.seg { display: flex; gap: 2px; height: 14px; margin-top: 14px; }
+.seg-part { min-width: 6px; border-radius: 4px; }
+.s1 { background: var(--series-1); } .s2 { background: var(--series-2); } .s3 { background: var(--series-3); }
+.legend { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0 0; padding: 0; font-size: 13px; color: var(--text-2); }
+.legend li { display: inline-flex; align-items: center; gap: 6px; }
+.legend b { color: var(--text); }
+.swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
